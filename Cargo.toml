@@ -1,0 +1,17 @@
+[package]
+name = "slm"
+version = "0.1.0"
+edition = "2024"
+description = "A system load monitor for Linux desktops, with the GPU's utilization, memory and power"
+license = "MIT OR Apache-2.0"
+authors = ["Daniel Araújo Miranda"]
+
+[dependencies]
+eframe = { version = "0.37", features = ["persistence"] }
+nvml-wrapper = "0.13"
+sysinfo = { version = "0.39", default-features = false, features = ["system", "disk", "network", "component"] }
+libc = "0.2"
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["wgpu"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
