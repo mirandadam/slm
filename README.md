@@ -12,7 +12,7 @@ A small window that shows how loaded your Linux machine is: the GPU, CPU, memory
 - **Disks:** reading and writing, and a pie of how full each one is, yellow from 70% and red from 90%.
 - **Network:** receiving and sending, per adapter.
 
-Point at a chart or a pie for its numbers. The **Settings** button sets how often slm measures, how far back the charts go, and which lines and charts are shown.
+Point at a chart or a pie for its numbers, and at a name for what the device is: the GPU's PCIe link and the temperature it slows down at, the network link's speed, the disk's model. The **Settings** button sets how often slm measures, how far back the charts go, and which lines and charts are shown.
 
 ## Install
 

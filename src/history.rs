@@ -389,6 +389,8 @@ pub mod tests {
             cpu: Err(Missing::NotReported),
             cpu_frequency: Err(Missing::NotReported),
             cpu_temperature: Err(Missing::NotReported),
+            cpu_sensor: None,
+            cpu_info: Default::default(),
             memory: Err(Missing::NotReported),
             disks: Vec::new(),
             networks: Vec::new(),
@@ -414,6 +416,8 @@ pub mod tests {
             fans: Ok(vec![Ok(40.0), Ok(41.0)]),
             clock: Ok(1500.0),
             max_clock: Ok(2205.0),
+            link: Ok((3, 16)),
+            info: Default::default(),
         }
     }
 
@@ -535,6 +539,7 @@ pub mod tests {
             available: 50,
             read: Ok(read),
             written: Ok(read),
+            info: Default::default(),
         };
         let mut history = History::default();
         let mut push = |time: Duration, read: u64, energy: u64| {
@@ -544,6 +549,8 @@ pub mod tests {
                 interface: "enp3s0".into(),
                 received: read,
                 transmitted: read,
+                link: None,
+                info: Default::default(),
             }];
             reading.cpu = Ok(CpuStat {
                 total: CpuTimes {
@@ -597,6 +604,7 @@ pub mod tests {
                 available: 1,
                 read: Ok(read),
                 written: Ok(read),
+                info: Default::default(),
             }];
             disks.push(reading);
         }

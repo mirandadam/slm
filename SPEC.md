@@ -31,6 +31,16 @@ This holds the requester's decisions about what slm does, as a person sees it. E
 - **D6. Which disks.** Every real mounted disk is shown, with snap's loop devices and repeated mounts of one device left out, and the person does not pick. Why: "show everything as filtered for now."
 - **D42. Snap's mounts.** The mount points snap makes for its packages, under `/snap/` and `/var/snap/`, are left out of a disk's mount points, as snap's loop devices are (D6). A disk mounted only there is left out. Why: on the requester's machine the disk's heading listed `/var/snap/firefox/common/host-hunspell` beside `/` and `/home`, which says nothing about the disk. Claude recommended leaving them out and the requester agreed, on 2026-10-24.
 - **D7. No warning about low disk space.** Why: the requester said no. Replaced in part by D48: the pie's color is the only sign, with no message or notification, at fixed levels of 70% and 90%, which the person does not set. Why: "as recommended" (Q22), on 2026-10-24.
+- **D50. What a pointer on a name tells.** Pointing at a name gives what helps tell what holds the work back, read without root:
+  - the GPU's name: its architecture, VRAM, its PCIe link at most and now, its driver and CUDA versions;
+  - the power: the limit, its default and the range it can be set in;
+  - the GPU's temperature: where the card slows down and where it shuts down;
+  - a network adapter: its link speed and duplex, also in MiB/s to compare with its rates, its model and its driver;
+  - a disk: its model, SSD or HDD, and its filesystem;
+  - the CPU: its model, and its cores and logical CPUs;
+  - the CPU's temperature: the sensor it comes from.
+
+  IP and MAC addresses and serial numbers are left out, because they are private and show in a shared screen; so is the CPU's maximum clock, which Linux gives below the boost. These texts are written by Claude from the vocabulary, not by the copy step of D19. Why: the requester asked for useful information on the items that had none, and accepted this list and this way of writing it, on 2026-10-25.
 - **D8. Only mounted filesystems** appear, not disks that are not mounted. Why: the requester's choice.
 - **D4. Other GPU vendors.** The first version reads NVIDIA GPUs only. The GPU code goes through one vendor-neutral interface, so that another vendor can be added without changing the rest. Why: "leave room for others". This reading of it is Claude's; the requester did not say more.
 

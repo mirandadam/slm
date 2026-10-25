@@ -13,7 +13,8 @@ use egui_kittest::kittest::{By, NodeT, Queryable};
 use super::*;
 use crate::history::tests::{bare, gpu};
 use crate::reading::{
-    CpuStat, CpuTimes, DiskReading, GpuFailure, Memory, NetworkReading, PowerReading, Reading,
+    CpuInfo, CpuStat, CpuTimes, DiskInfo, DiskReading, GpuFailure, GpuInfo, Memory, NetworkInfo,
+    NetworkReading, PowerReading, Reading,
 };
 
 #[derive(Default)]
@@ -61,6 +62,16 @@ impl Machine {
             network: 1 << 30,
             gpu: GpuReading {
                 name: "NVIDIA GeForce RTX 2070".into(),
+                link: Ok((1, 16)),
+                info: Arc::new(GpuInfo {
+                    architecture: Some("Turing".into()),
+                    driver: Some("580.178.04".into()),
+                    cuda: Some((13, 0)),
+                    slowdown: Some(91.0),
+                    shutdown: Some(94.0),
+                    default_limit: Some(200.0),
+                    max_link: Some((3, 16)),
+                }),
                 ..gpu(GPU_ID, PowerReading::Energy(Ok(0)), Ok(185.0))
             },
         }
@@ -114,13 +125,29 @@ impl Machine {
                 available: 60_475_510_784,
                 read: Ok(self.disk),
                 written: Ok(self.disk / 3),
+                info: Arc::new(DiskInfo {
+                    model: Some("WDC WDS500G1B0C-00S6U0".into()),
+                    solid_state: Some(true),
+                    file_system: Some("btrfs".into()),
+                }),
             }],
             networks: vec![NetworkReading {
                 interface: "enp3s0".into(),
                 received: self.network,
                 transmitted: self.network / 5,
+                link: Some((1000, true)),
+                info: Arc::new(NetworkInfo {
+                    model: Some("Realtek RTL8111/8168/8411 Gigabit Ethernet".into()),
+                    driver: Some("r8169".into()),
+                }),
             }],
             gpu: GpuState::Running(vec![gpu]),
+            cpu_sensor: Some("k10temp Tctl"),
+            cpu_info: Arc::new(CpuInfo {
+                model: Some("AMD Ryzen 5 2600X Six-Core Processor".into()),
+                cores: Some(6),
+                logical: Some(12),
+            }),
             ..bare(self.time, self.interval)
         }
     }
@@ -353,7 +380,7 @@ fn with_several_gpus_each_numbered_line_names_its_card() {
             .get_by_label(&fill(text::NUMBERED_LINE, &[("name", name), ("n", "2")]))
             .hover();
         harness.run_steps(4);
-        harness.get_by_label("Second");
+        harness.get_by_label_contains("Second");
     }
 }
 
@@ -429,7 +456,7 @@ fn gpu_power_tooltip_names_its_averaging_window_or_says_it_is_instantaneous() {
     let shown = out_of(text::WATTS, number(power.watts, 0), number(185.0, 0));
     harness.get_by_label(&shown).hover();
     harness.run_steps(4);
-    harness.get_by_label(&fill(text::AVERAGED_OVER, &[("seconds", "2.0")]));
+    harness.get_by_label_contains(&fill(text::AVERAGED_OVER, &[("seconds", "2.0")]));
 
     let mut machine = Machine::new(Duration::from_millis(500));
     machine.gpu.power = PowerReading::Instant(Ok(0.0));
@@ -447,7 +474,7 @@ fn gpu_power_tooltip_names_its_averaging_window_or_says_it_is_instantaneous() {
         ))
         .hover();
     harness.run_steps(4);
-    harness.get_by_label(text::INSTANTANEOUS);
+    harness.get_by_label_contains(text::INSTANTANEOUS);
 }
 
 #[test]
@@ -1125,4 +1152,94 @@ fn capture_sizes() {
             .save(folder.join(format!("{width}x{height}.png")))
             .unwrap();
     }
+}
+
+/// Points at the first node named `name` and returns what then shows.
+fn point_at(harness: &mut Harness<'_, App>, name: &str) {
+    harness.get_all_by_label(name).next().unwrap().hover();
+    harness.run_steps(4);
+}
+
+fn shows(harness: &Harness<'_, App>, part: &str) -> bool {
+    harness.query_all_by_label_contains(part).next().is_some()
+}
+
+#[test]
+fn d50_the_gpus_name_tells_what_it_is_and_its_pcie_link() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    point_at(&mut harness, "NVIDIA GeForce RTX 2070");
+    for part in [
+        "Turing",
+        "8.0 GiB",
+        "PCIe 3.0 ×16",
+        "1.0 ×16",
+        "580.178.04",
+        "CUDA 13.0",
+    ] {
+        assert!(shows(&harness, part), "{part}");
+    }
+}
+
+#[test]
+fn d50_the_gpus_temperature_tells_where_it_slows_down_and_shuts_down() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    point_at(&mut harness, text::GPU_TEMPERATURE);
+    assert!(shows(&harness, "91 °C"));
+    assert!(shows(&harness, "94 °C"));
+}
+
+#[test]
+fn d50_the_power_tells_its_default_limit_and_range() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    harness
+        .get_all_by_label_contains("of 185 W")
+        .next()
+        .unwrap()
+        .hover();
+    harness.run_steps(4);
+    assert!(shows(
+        &harness,
+        "Limit 185 W, default 200 W, can be set from 92.5 W to 210 W"
+    ));
+}
+
+#[test]
+fn d50_a_network_adapter_tells_its_link_speed_model_and_driver() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    point_at(&mut harness, "enp3s0");
+    for part in [
+        "1000 Mb/s",
+        "119.2 MiB/s",
+        "full duplex",
+        "Realtek",
+        "r8169",
+    ] {
+        assert!(shows(&harness, part), "{part}");
+    }
+}
+
+#[test]
+fn d50_a_disk_tells_its_model_kind_and_filesystem() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    point_at(&mut harness, "nvme0n1p1");
+    for part in ["WDC WDS500G1B0C-00S6U0", "SSD", "btrfs"] {
+        assert!(shows(&harness, part), "{part}");
+    }
+}
+
+#[test]
+fn d50_the_cpu_tells_its_model_cores_and_sensor() {
+    let (_, history) = running();
+    let mut harness = open(app(history, None));
+    point_at(&mut harness, text::USAGE);
+    for part in ["Ryzen 5 2600X", "6 cores", "12 logical CPUs"] {
+        assert!(shows(&harness, part), "{part}");
+    }
+    point_at(&mut harness, text::CPU_TEMPERATURE);
+    assert!(shows(&harness, "k10temp Tctl"));
 }

@@ -5,18 +5,24 @@
 //! refresh that comes less than 200 ms after its last one, which would
 //! repeat an old value as new at slm's fastest refresh.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use sysinfo::{Components, CpuRefreshKind, Disks, MemoryRefreshKind, Networks, System};
 
-use crate::reading::{CpuStat, CpuTimes, DiskReading, Memory, Missing, NetworkReading, Value};
+use crate::reading::{
+    CpuInfo, CpuStat, CpuTimes, DiskInfo, DiskReading, Memory, Missing, NetworkInfo,
+    NetworkReading, Value,
+};
 
 /// What the system part of one reading holds.
 pub struct SystemReading {
     pub cpu: Value<CpuStat>,
     pub cpu_frequency: Value<f64>,
     pub cpu_temperature: Value<f64>,
+    pub cpu_sensor: Option<&'static str>,
+    pub cpu_info: Arc<CpuInfo>,
     pub memory: Value<Memory>,
     pub disks: Vec<DiskReading>,
     pub networks: Vec<NetworkReading>,
@@ -27,6 +33,10 @@ pub struct SystemSource {
     disks: Disks,
     networks: Networks,
     components: Components,
+    // What each device is, read once, by its name (D50).
+    cpu_info: Option<Arc<CpuInfo>>,
+    disk_info: HashMap<String, Arc<DiskInfo>>,
+    network_info: HashMap<String, Arc<NetworkInfo>>,
 }
 
 impl SystemSource {
@@ -36,6 +46,9 @@ impl SystemSource {
             disks: Disks::new(),
             networks: Networks::new(),
             components: Components::new(),
+            cpu_info: None,
+            disk_info: HashMap::new(),
+            network_info: HashMap::new(),
         }
     }
 
@@ -54,6 +67,15 @@ impl SystemSource {
             .ok_or(Missing::Failed);
 
         let cpus = self.system.cpus();
+        let cpu_info = (self.cpu_info.get_or_insert_with(|| {
+            Arc::new(CpuInfo {
+                model: (cpus.first().map(|c| c.brand().trim().to_string()))
+                    .filter(|b| !b.is_empty()),
+                cores: System::physical_core_count(),
+                logical: (!cpus.is_empty()).then_some(cpus.len()),
+            })
+        }))
+        .clone();
         let cpu_frequency = if cpus.is_empty() || cpus.iter().all(|c| c.frequency() == 0) {
             Err(Missing::NotReported)
         } else {
@@ -76,9 +98,24 @@ impl SystemSource {
 
         let diskstats = std::fs::read_to_string("/proc/diskstats").unwrap_or_default();
         let counted = counted_devices(&diskstats);
+        let disk_info = &mut self.disk_info;
         let disks = group_disks(self.disks.list().iter().map(|d| {
             let device = d.name().to_string_lossy().into_owned();
+            let info = (disk_info.entry(device.clone()).or_insert_with(|| {
+                Arc::new(DiskInfo {
+                    model: disk_model(&kernel_name(&device)),
+                    solid_state: match d.kind() {
+                        sysinfo::DiskKind::SSD => Some(true),
+                        sysinfo::DiskKind::HDD => Some(false),
+                        sysinfo::DiskKind::Unknown(_) => None,
+                    },
+                    file_system: Some(d.file_system().to_string_lossy().into_owned())
+                        .filter(|f| !f.is_empty()),
+                })
+            }))
+            .clone();
             MountedDisk {
+                info,
                 counted: counted.contains(kernel_name(&device).as_str()),
                 device,
                 mount_point: d.mount_point().to_path_buf(),
@@ -89,12 +126,34 @@ impl SystemSource {
             }
         }));
 
+        let sys_class_net = Path::new("/sys/class/net");
+        let network_info = &mut self.network_info;
         let mut networks: Vec<NetworkReading> = (self.networks.list().iter())
-            .filter(|(name, _)| is_physical(Path::new("/sys/class/net"), name))
-            .map(|(name, data)| NetworkReading {
-                interface: name.clone(),
-                received: data.total_received(),
-                transmitted: data.total_transmitted(),
+            .filter(|(name, _)| is_physical(sys_class_net, name))
+            .map(|(name, data)| {
+                let adapter = sys_class_net.join(name);
+                let read = |file: &str| std::fs::read_to_string(adapter.join(file)).ok();
+                NetworkReading {
+                    interface: name.clone(),
+                    received: data.total_received(),
+                    transmitted: data.total_transmitted(),
+                    link: link(read("speed").as_deref(), read("duplex").as_deref()),
+                    info: (network_info.entry(name.clone()).or_insert_with(|| {
+                        let udev = (read("ifindex"))
+                            .and_then(|i| {
+                                std::fs::read_to_string(format!("/run/udev/data/n{}", i.trim()))
+                                    .ok()
+                            })
+                            .unwrap_or_default();
+                        Arc::new(NetworkInfo {
+                            model: udev_model(&udev),
+                            driver: std::fs::read_link(adapter.join("device/driver"))
+                                .ok()
+                                .and_then(|p| Some(p.file_name()?.to_string_lossy().into_owned())),
+                        })
+                    }))
+                    .clone(),
+                }
             })
             .collect();
         networks.sort_by(|a, b| a.interface.cmp(&b.interface));
@@ -103,6 +162,8 @@ impl SystemSource {
             cpu,
             cpu_frequency,
             cpu_temperature: cpu_temperature(&sensors),
+            cpu_sensor: cpu_sensor(&sensors),
+            cpu_info,
             memory,
             disks,
             networks,
@@ -150,6 +211,11 @@ pub fn parse_proc_stat(text: &str) -> Option<CpuStat> {
 /// die's temperature.
 const CPU_SENSORS: [&str; 3] = ["k10temp Tdie", "k10temp Tctl", "coretemp Package id 0"];
 
+/// The label of the sensor the CPU's temperature comes from (D50).
+pub fn cpu_sensor(sensors: &[(&str, Option<f32>)]) -> Option<&'static str> {
+    (CPU_SENSORS.iter().copied()).find(|label| sensors.iter().any(|(l, _)| l == label))
+}
+
 pub fn cpu_temperature(sensors: &[(&str, Option<f32>)]) -> Value<f64> {
     let (_, temperature) = CPU_SENSORS
         .iter()
@@ -169,6 +235,7 @@ pub struct MountedDisk {
     /// one it does not, such as an `overlay` or a network filesystem,
     /// `sysinfo` leaves its counts at 0, which would show as a rate of 0.
     pub counted: bool,
+    pub info: Arc<DiskInfo>,
 }
 
 /// One entry per device, with its mount points together, leaving out loop
@@ -194,6 +261,7 @@ pub fn group_disks(mounted: impl Iterator<Item = MountedDisk>) -> Vec<DiskReadin
                     .then_some(disk.read)
                     .ok_or(Missing::NotReported),
                 written: (disk.counted.then_some(disk.written)).ok_or(Missing::NotReported),
+                info: disk.info,
             }),
         }
     }
@@ -216,6 +284,39 @@ pub fn counted_devices(diskstats: &str) -> HashSet<&str> {
 fn kernel_name(device: &str) -> String {
     let path = std::fs::canonicalize(device).unwrap_or_else(|_| PathBuf::from(device));
     (path.file_name()).map_or(device.to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// The model of the drive a block device is on, such as "WDC
+/// WDS500G1B0C-00S6U0", from `/sys/class/block/`. A partition's model is its
+/// drive's. A device with no drive, such as `dm-0`, has none.
+fn disk_model(kernel_name: &str) -> Option<String> {
+    let mut path = std::fs::canonicalize(Path::new("/sys/class/block").join(kernel_name)).ok()?;
+    if path.join("partition").exists() {
+        path.pop();
+    }
+    let model = std::fs::read_to_string(path.join("device/model")).ok()?;
+    Some(model.trim().to_string()).filter(|m| !m.is_empty())
+}
+
+/// A link's speed and duplex from `/sys/class/net/<name>/speed` and
+/// `duplex`. A link that is down gives an error or -1, and is `None`.
+pub fn link(speed: Option<&str>, duplex: Option<&str>) -> Option<(u32, bool)> {
+    let speed: u32 = speed?.trim().parse().ok().filter(|s| *s > 0)?;
+    Some((speed, duplex.is_some_and(|d| d.trim() == "full")))
+}
+
+/// The vendor and model udev's hardware database gives an adapter, from its
+/// `/run/udev/data/n<ifindex>` file.
+pub fn udev_model(udev: &str) -> Option<String> {
+    let field = |name: &str| {
+        (udev.lines()).find_map(|l| l.strip_prefix(&format!("E:{name}=")).map(str::trim))
+    };
+    let model = field("ID_MODEL_FROM_DATABASE");
+    let vendor = field("ID_VENDOR_FROM_DATABASE");
+    match (vendor, model) {
+        (Some(vendor), Some(model)) => Some(format!("{vendor} {model}")),
+        (vendor, model) => model.or(vendor).map(str::to_string),
+    }
 }
 
 /// A physical interface has a `device` link under `/sys/class/net/<name>/`,
@@ -289,6 +390,38 @@ ctxt 999
         assert_eq!(cpu_temperature(&none), Err(Missing::NotReported));
     }
 
+    #[test]
+    fn d50_a_link_that_is_down_has_no_speed() {
+        assert_eq!(link(Some("1000\n"), Some("full\n")), Some((1000, true)));
+        assert_eq!(link(Some("100\n"), Some("half\n")), Some((100, false)));
+        assert_eq!(link(Some("-1\n"), Some("unknown\n")), None);
+        assert_eq!(link(None, None), None);
+    }
+
+    #[test]
+    fn d50_an_adapters_model_comes_from_udevs_database() {
+        let udev = "I:123\nE:ID_VENDOR_FROM_DATABASE=Realtek Semiconductor Co., Ltd.\n\
+            E:ID_MODEL_FROM_DATABASE=RTL8111/8168/8411 PCI Express Gigabit Ethernet Controller\n";
+        assert_eq!(
+            udev_model(udev).as_deref(),
+            Some(
+                "Realtek Semiconductor Co., Ltd. RTL8111/8168/8411 PCI Express Gigabit Ethernet Controller"
+            )
+        );
+        assert_eq!(
+            udev_model("E:ID_MODEL_FROM_DATABASE=X\n").as_deref(),
+            Some("X")
+        );
+        assert_eq!(udev_model(""), None);
+    }
+
+    #[test]
+    fn d50_the_sensor_named_is_the_one_the_temperature_comes_from() {
+        let both = [("k10temp Tctl", Some(60.0)), ("k10temp Tdie", Some(50.0))];
+        assert_eq!(cpu_sensor(&both), Some("k10temp Tdie"));
+        assert_eq!(cpu_sensor(&[("acpitz temp1", Some(70.0))]), None);
+    }
+
     fn mounted(device: &str, mount_point: &str) -> MountedDisk {
         MountedDisk {
             device: device.into(),
@@ -298,6 +431,7 @@ ctxt 999
             read: 7,
             written: 9,
             counted: true,
+            info: Arc::default(),
         }
     }
 

@@ -29,6 +29,13 @@ slm reads every source on a thread of its own, once per interval chosen in "Meas
 - **Network** shows the interfaces that have a `device` link in `/sys/class/net/<name>/`, which leaves out loopback and virtual interfaces, such as `virbr0`. The rates come from the cumulative bytes received and transmitted.
 - **GPU** values come from NVML: the line "GPU" is NVML's utilization, then the memory used, the enforced power limit (the limit the card holds to, not the limit requested by software, which `nvidia-smi` calls `power.limit`), temperature, each fan's speed, and the graphics clock against its maximum.
 
+**What a pointer on a name tells** (D50) is read once per device, when slm first sees it, except the two links, which are read at each measurement because they change:
+
+- the GPU's architecture, its default power limit, its slowdown and shutdown temperatures and its PCIe link at most, from NVML, and its driver and CUDA versions, from NVML's system queries. Its PCIe link now comes from NVML too; on the RTX 2070 it is PCIe 1.0 while idle and 3.0 under load;
+- the CPU's model and its cores, from sysinfo; the temperature's sensor is the one chosen above;
+- a disk's model, from `/sys/class/block/<device>/device/model`, or its drive's for a partition, and whether it is an SSD and its filesystem, from sysinfo;
+- a network adapter's link speed and duplex, from `/sys/class/net/<name>/speed` and `duplex`, its vendor and model, from udev's hardware database in `/run/udev/data/n<index>`, and its driver, from its `device/driver` link.
+
 If no reading arrives for three intervals and a second, the window says measuring has stopped, and for how long, because the thread may have stopped or be stuck in a read, and the numbers would otherwise still look live.
 
 A rate is computed from two readings, so it waits for the second. No rate is shown for an interval that spans a region with no readings, or in which a counter went backwards, as NVML's energy counter does after the driver reloads.

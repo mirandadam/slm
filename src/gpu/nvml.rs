@@ -4,16 +4,23 @@
 use std::sync::Arc;
 
 use nvml_wrapper::Nvml;
-use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
+use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor, TemperatureThreshold};
 use nvml_wrapper::error::NvmlError;
 
 use super::GpuSource;
-use crate::reading::{GpuFailure, GpuReading, Missing, PowerReading, Value};
+use crate::reading::{GpuFailure, GpuInfo, GpuReading, Missing, PowerReading, Value};
 
 /// Starts NVML and lists its GPUs.
 pub fn start() -> Result<Vec<Box<dyn GpuSource>>, GpuFailure> {
     let nvml = Arc::new(Nvml::init().map_err(|e| start_failure(&e))?);
     let count = nvml.device_count().map_err(|e| start_failure(&e))?;
+    let driver = nvml.sys_driver_version().ok();
+    let cuda = (nvml.sys_cuda_driver_version().ok()).map(|v| {
+        (
+            nvml_wrapper::cuda_driver_version_major(v),
+            nvml_wrapper::cuda_driver_version_minor(v),
+        )
+    });
     (0..count)
         .map(|index| {
             let device = nvml.device_by_index(index).map_err(|e| start_failure(&e))?;
@@ -21,7 +28,23 @@ pub fn start() -> Result<Vec<Box<dyn GpuSource>>, GpuFailure> {
             // because thresholds and hidden lines are kept under the UUID (D31,
             // D32), and a card keyed by anything else would lose them.
             let id = device.uuid().map_err(|e| start_failure(&e))?;
+            let temperature =
+                |threshold| (device.temperature_threshold(threshold).ok()).map(f64::from);
+            let info = GpuInfo {
+                architecture: device.architecture().ok().map(|a| a.to_string()),
+                driver: driver.clone(),
+                cuda,
+                slowdown: temperature(TemperatureThreshold::Slowdown),
+                shutdown: temperature(TemperatureThreshold::Shutdown),
+                default_limit: (device.power_management_limit_default().ok())
+                    .map(|mw| mw as f64 / 1000.0),
+                max_link: device
+                    .max_pcie_link_gen()
+                    .ok()
+                    .zip(device.max_pcie_link_width().ok()),
+            };
             Ok(Box::new(NvmlGpu {
+                info: Arc::new(info),
                 nvml: nvml.clone(),
                 name: device
                     .name()
@@ -79,6 +102,7 @@ struct NvmlGpu {
     nvml: Arc<Nvml>,
     id: String,
     name: String,
+    info: Arc<GpuInfo>,
 }
 
 impl NvmlGpu {
@@ -97,6 +121,8 @@ impl NvmlGpu {
             fans: Err(Missing::Failed),
             clock: Err(Missing::Failed),
             max_clock: Err(Missing::Failed),
+            link: Err(Missing::Failed),
+            info: self.info.clone(),
         }
     }
 }
@@ -135,6 +161,9 @@ impl GpuSource for NvmlGpu {
             fans,
             clock: value(device.clock_info(Clock::Graphics)).map(f64::from),
             max_clock: value(device.max_clock_info(Clock::Graphics)).map(f64::from),
+            link: value(device.current_pcie_link_gen())
+                .and_then(|generation| Ok((generation, value(device.current_pcie_link_width())?))),
+            info: self.info.clone(),
         }
     }
 }

@@ -237,7 +237,7 @@ impl App {
     fn top_line(&mut self, ui: &mut Ui, view: &View) {
         ui.horizontal(|ui| {
             if let [gpu] = running_gpus(view) {
-                ui.label(RichText::new(&gpu.name).strong());
+                about(ui.label(RichText::new(&gpu.name).strong()), gpu_about(gpu));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // The menu stays open until a click outside it, so that the
@@ -391,6 +391,126 @@ fn disk_title(disk: &crate::reading::DiskReading) -> String {
     )
 }
 
+/// A disk's title, then what it is (D50).
+fn disk_about(disk: &crate::reading::DiskReading) -> String {
+    let info = &disk.info;
+    let kind = info
+        .solid_state
+        .map(|ssd| if ssd { text::SSD } else { text::HDD });
+    let kind = [kind, info.file_system.as_deref()];
+    let kind = kind.into_iter().flatten().collect::<Vec<_>>().join(", ");
+    let kind = (!kind.is_empty()).then_some(kind);
+    lines([Some(disk_title(disk)), info.model.clone(), kind]).unwrap_or_default()
+}
+
+/// What a network adapter is, and its link now (D50).
+fn network_about(net: &crate::reading::NetworkReading) -> Option<String> {
+    let link = net.link.map(|(speed, full)| {
+        fill(
+            text::LINK,
+            &[
+                ("speed", &speed.to_string()),
+                ("rate", &rate(speed as f64 * 1e6 / 8.0)),
+                (
+                    "duplex",
+                    if full {
+                        text::FULL_DUPLEX
+                    } else {
+                        text::HALF_DUPLEX
+                    },
+                ),
+            ],
+        )
+    });
+    let driver = (net.info.driver.as_ref()).map(|d| fill(text::DRIVER, &[("driver", d)]));
+    lines([link, net.info.model.clone(), driver])
+}
+
+/// What the CPU is (D50).
+fn cpu_about(info: &crate::reading::CpuInfo) -> Option<String> {
+    let cores = info.cores.zip(info.logical).map(|(cores, logical)| {
+        fill(
+            text::CPU_CORES,
+            &[
+                ("cores", &cores.to_string()),
+                ("logical", &logical.to_string()),
+            ],
+        )
+    });
+    lines([info.model.clone(), cores])
+}
+
+/// What a GPU is: its architecture and VRAM, its PCIe link, its driver (D50).
+fn gpu_about(gpu: &GpuReading) -> Option<String> {
+    let info = &gpu.info;
+    let vram = (gpu.memory_total.ok()).map(|b| fill(text::GIB, &[("value", &gib_number(b))]));
+    let kind = match (&info.architecture, vram) {
+        (Some(architecture), Some(vram)) => Some(fill(
+            text::GPU_KIND,
+            &[("architecture", architecture), ("vram", &vram)],
+        )),
+        (architecture, vram) => architecture.clone().or(vram),
+    };
+    let pcie = |(generation, width): (u32, u32)| {
+        fill(
+            text::PCIE,
+            &[
+                ("generation", &generation.to_string()),
+                ("width", &width.to_string()),
+            ],
+        )
+    };
+    let link = match (info.max_link, gpu.link.ok()) {
+        (Some(max), Some(now)) => Some(fill(
+            text::GPU_LINK,
+            &[("max", &pcie(max)), ("now", &pcie(now))],
+        )),
+        (max, now) => max.or(now).map(pcie),
+    };
+    let driver = (info.driver.as_ref()).map(|driver| match info.cuda {
+        Some((major, minor)) => fill(
+            text::GPU_DRIVER,
+            &[("driver", driver), ("cuda", &format!("{major}.{minor}"))],
+        ),
+        None => fill(text::DRIVER, &[("driver", driver)]),
+    });
+    lines([kind, link, driver])
+}
+
+/// The GPU's power limit, its default, and the range it can be set in (D50).
+fn power_limits(gpu: &GpuReading) -> Option<String> {
+    let (min, max) = gpu.power_limit_range.ok()?;
+    Some(fill(
+        text::POWER_LIMITS,
+        &[
+            ("limit", &exact_watts(gpu.power_limit.ok()?)),
+            ("default", &exact_watts(gpu.info.default_limit?)),
+            ("min", &exact_watts(min)),
+            ("max", &exact_watts(max)),
+        ],
+    ))
+}
+
+/// Watts with a decimal only where there is one, as a limit of 92.5 W.
+fn exact_watts(value: f64) -> String {
+    let decimals = if value.fract() == 0.0 { 0 } else { 1 };
+    fill(text::WATTS, &[("value", &number(value, decimals))])
+}
+
+/// The lines that are known, one per line of a tooltip, or none (D50).
+fn lines(parts: impl IntoIterator<Item = Option<String>>) -> Option<String> {
+    let known: Vec<String> = parts.into_iter().flatten().collect();
+    (!known.is_empty()).then(|| known.join("\n"))
+}
+
+/// Gives a name its tooltip, where there is one.
+fn about(response: Response, about: Option<String>) -> Response {
+    match about {
+        Some(text) => response.on_hover_text(text),
+        None => response,
+    }
+}
+
 /// A disk's short name, the last part of its device, as `nvme0n1p1`.
 fn disk_name(device: &str) -> &str {
     device.rsplit('/').next().unwrap_or(device)
@@ -459,6 +579,16 @@ fn value(ui: &mut Ui, value: Value<String>) -> Response {
 
 /// A name and its values among the texts below the grid, which wrap.
 fn row(ui: &mut Ui, name: &str, values: Vec<Value<String>>) -> Vec<Response> {
+    row_about(ui, name, None, values)
+}
+
+/// A row whose name tells, under the pointer, `about` (D50).
+fn row_about(
+    ui: &mut Ui,
+    name: &str,
+    about_name: Option<String>,
+    values: Vec<Value<String>>,
+) -> Vec<Response> {
     // A row that does not fit in what is left of the current line starts the
     // next, because egui's wrapping does not move a group.
     let font = egui::TextStyle::Body.resolve(ui.style());
@@ -479,7 +609,7 @@ fn row(ui: &mut Ui, name: &str, values: Vec<Value<String>>) -> Vec<Response> {
     }
     let responses = ui
         .horizontal(|ui| {
-            ui.label(name);
+            about(ui.label(name), about_name);
             values.into_iter().map(|v| value(ui, v)).collect()
         })
         .inner;
@@ -866,7 +996,7 @@ fn measurements(ui: &mut Ui, view: &View, settings: &Settings) {
                     },
                 );
                 if let Some(name) = name {
-                    name.on_hover_text(disk_title(disk));
+                    name.on_hover_text(disk_about(disk));
                 }
             }
             for (net, rates) in entry
@@ -885,7 +1015,10 @@ fn measurements(ui: &mut Ui, view: &View, settings: &Settings) {
                     ui,
                     view,
                     (shown("rates"), shown("rates-chart")),
-                    |ui| ui.label(fill(text::INTERFACE, &[("name", interface)])),
+                    |ui| {
+                        let name = ui.label(fill(text::INTERFACE, &[("name", interface)]));
+                        about(name, network_about(net))
+                    },
                     |ui| {
                         pair_value(ui, text::NETWORK_RATES, rates.received, rates.transmitted);
                     },
@@ -915,9 +1048,11 @@ fn measurements(ui: &mut Ui, view: &View, settings: &Settings) {
         }
         let shown = |item| settings.shown(&key("cpu", item));
         if shown("temperature") {
-            row(
+            let sensor = (entry.reading.cpu_sensor).map(|s| fill(text::SENSOR, &[("sensor", s)]));
+            row_about(
                 ui,
                 text::CPU_TEMPERATURE,
+                sensor,
                 vec![entry.reading.cpu_temperature.map(celsius)],
             );
         }
@@ -1025,10 +1160,12 @@ fn gpu_lines(
             format: watts,
         },
     ));
-    // With several GPUs, each numbered line names its card.
+    // With several GPUs, each numbered line names its card, and tells what
+    // it is (D50).
     if several {
+        let title = lines([Some(title.to_string()), gpu_about(gpu)]);
         for name in names.into_iter().flatten() {
-            name.on_hover_text(title);
+            about(name, title.clone());
         }
     }
 }
@@ -1049,7 +1186,7 @@ fn power_value(ui: &mut Ui, gpu: &GpuReading, power: Value<GpuPower>) {
             ),
             None => text::INSTANTANEOUS.to_string(),
         };
-        response.on_hover_text(tooltip);
+        about(response, lines([Some(tooltip), power_limits(gpu)]));
     }
 }
 
@@ -1094,7 +1231,16 @@ fn gpu_texts(
     }
     if shown("temperature") {
         let name = gpu_line(text::GPU_TEMPERATURE, several, n);
-        row(ui, &name, vec![gpu.temperature.map(celsius)]);
+        let limits = (gpu.info.slowdown.zip(gpu.info.shutdown)).map(|(slowdown, shutdown)| {
+            fill(
+                text::TEMPERATURE_LIMITS,
+                &[
+                    ("slowdown", &celsius(slowdown)),
+                    ("shutdown", &celsius(shutdown)),
+                ],
+            )
+        });
+        row_about(ui, &name, limits, vec![gpu.temperature.map(celsius)]);
     }
     if shown("fans") {
         match &gpu.fans {
@@ -1181,7 +1327,7 @@ fn cpu_line(ui: &mut Ui, view: &View, entry: &Entry, settings: &Settings) {
         ui,
         view,
         (shown("usage") || shown("cores"), shown("usage-chart")),
-        |ui| ui.label(text::USAGE),
+        |ui| about(ui.label(text::USAGE), cpu_about(&entry.reading.cpu_info)),
         |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;

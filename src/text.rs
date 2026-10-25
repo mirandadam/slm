@@ -163,6 +163,35 @@ pub const SPACE_FULL: &str = "{amount} ({share})";
 /// The threshold, named in the power chart's tooltip.
 pub const THRESHOLD: &str = "Threshold";
 
+// What a pointer on a name tells (D50), written by Claude from the
+// vocabulary, not by the copy step. Each is one line of a tooltip, left out
+// when its values are unknown.
+/// A GPU's architecture and its VRAM, such as "Turing · 8.0 GiB VRAM".
+pub const GPU_KIND: &str = "{architecture} · {vram} VRAM";
+/// A PCIe link, `{generation}` and `{width}` as the card reports them.
+pub const PCIE: &str = "PCIe {generation}.0 ×{width}";
+/// The GPU's PCIe link at most, and now, which drops while the GPU is idle.
+pub const GPU_LINK: &str = "{max} at most, {now} now (lower while idle)";
+/// The driver's version, and the highest CUDA version it supports.
+pub const GPU_DRIVER: &str = "Driver {driver} · CUDA {cuda}";
+pub const DRIVER: &str = "Driver {driver}";
+/// The GPU's temperature limits.
+pub const TEMPERATURE_LIMITS: &str = "Slows down at {slowdown}, shuts down at {shutdown}";
+/// The power limit, its default, and the range it can be set in.
+pub const POWER_LIMITS: &str = "Limit {limit}, default {default}, can be set from {min} to {max}";
+/// A network link's speed, in megabits as Linux gives it and as a rate, to
+/// compare with the adapter's rates.
+pub const LINK: &str = "{speed} Mb/s link ({rate}), {duplex}";
+pub const FULL_DUPLEX: &str = "full duplex";
+pub const HALF_DUPLEX: &str = "half duplex";
+/// What a disk is: SSD or HDD, and its filesystem.
+pub const SSD: &str = "SSD";
+pub const HDD: &str = "HDD";
+/// The CPU's cores and logical CPUs.
+pub const CPU_CORES: &str = "{cores} cores, {logical} logical CPUs";
+/// The sensor the CPU's temperature comes from.
+pub const SENSOR: &str = "Sensor: {sensor}";
+
 /// Replaces each `{name}` in `slot` by its value.
 pub fn fill(slot: &str, values: &[(&str, &str)]) -> String {
     let mut text = slot.to_string();

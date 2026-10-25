@@ -4,6 +4,7 @@
 //! history can tell whether two readings may be compared (see `history`).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Why a value is missing. Each tells the person something different, so the
@@ -34,10 +35,22 @@ pub struct Reading {
     pub cpu_frequency: Value<f64>,
     /// In °C.
     pub cpu_temperature: Value<f64>,
+    /// The sensor the temperature comes from, such as "k10temp Tctl" (D50).
+    pub cpu_sensor: Option<&'static str>,
+    /// What the CPU is (D50).
+    pub cpu_info: Arc<CpuInfo>,
     pub memory: Value<Memory>,
     pub disks: Vec<DiskReading>,
     pub networks: Vec<NetworkReading>,
     pub gpu: GpuState,
+}
+
+/// What the CPU is, read once (D50).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CpuInfo {
+    pub model: Option<String>,
+    pub cores: Option<usize>,
+    pub logical: Option<usize>,
 }
 
 /// Cumulative CPU times, in ticks, from `/proc/stat`.
@@ -76,6 +89,17 @@ pub struct DiskReading {
     /// Cumulative bytes read and written.
     pub read: Value<u64>,
     pub written: Value<u64>,
+    /// What the disk is (D50).
+    pub info: Arc<DiskInfo>,
+}
+
+/// What a disk is, read once per device (D50).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DiskInfo {
+    pub model: Option<String>,
+    /// `Some(true)` for an SSD, `Some(false)` for an HDD.
+    pub solid_state: Option<bool>,
+    pub file_system: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +108,20 @@ pub struct NetworkReading {
     /// Cumulative bytes.
     pub received: u64,
     pub transmitted: u64,
+    /// The link's speed, in Mb/s, and whether it is full duplex, read at
+    /// each measurement, because a cable or a switch can change it. `None`
+    /// when the link is down or its driver does not say.
+    pub link: Option<(u32, bool)>,
+    /// What the adapter is (D50).
+    pub info: Arc<NetworkInfo>,
+}
+
+/// What a network adapter is, read once per adapter (D50).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NetworkInfo {
+    /// The vendor and model, from udev's hardware database.
+    pub model: Option<String>,
+    pub driver: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -139,6 +177,27 @@ pub struct GpuReading {
     /// The graphics clock and its maximum, in MHz.
     pub clock: Value<f64>,
     pub max_clock: Value<f64>,
+    /// The PCIe link's generation and width now, which drop while the GPU is
+    /// idle (D50).
+    pub link: Value<(u32, u32)>,
+    /// What the GPU is (D50).
+    pub info: Arc<GpuInfo>,
+}
+
+/// What a GPU is, read once when the GPU source starts (D50).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GpuInfo {
+    pub architecture: Option<String>,
+    pub driver: Option<String>,
+    /// The highest CUDA version the driver supports, major and minor.
+    pub cuda: Option<(i32, i32)>,
+    /// In °C, where the card slows down and where it shuts down.
+    pub slowdown: Option<f64>,
+    pub shutdown: Option<f64>,
+    /// In W.
+    pub default_limit: Option<f64>,
+    /// The PCIe link's generation and width at most.
+    pub max_link: Option<(u32, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
