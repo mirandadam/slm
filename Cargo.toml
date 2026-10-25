@@ -2,8 +2,13 @@
 name = "slm"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.95"
 description = "A system load monitor for Linux desktops, with the GPU's utilization, memory and power"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/mirandadam/slm"
+readme = "README.md"
+keywords = ["system-monitor", "gpu", "nvidia", "egui", "linux"]
+categories = ["visualization", "hardware-support"]
 authors = ["Daniel Araújo Miranda"]
 
 [dependencies]

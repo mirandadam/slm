@@ -2,7 +2,7 @@
 //! so that the words can be written and changed in one place (D19, D27).
 //!
 //! A slot that holds values names each as `{name}`, which `fill` replaces.
-//! The copy step wrote them, from what each place does (D19).
+//! They are written from what each place does (D19).
 
 // The window and its settings bar.
 pub const WINDOW_TITLE: &str = "slm";
@@ -14,7 +14,7 @@ pub const MILLISECONDS: &str = "{n} ms";
 pub const SECONDS: &str = "{n} s";
 /// A history length in minutes, `{n}`.
 pub const MINUTES: &str = "{n} min";
-/// The button of the menu of what is shown (D26).
+/// The heading of the boxes of what is shown, in the settings menu (D26, D44).
 pub const SHOWN: &str = "Choose lines and charts";
 
 // The panels' names.
@@ -116,7 +116,6 @@ pub const MHZ: &str = "{value} MHz";
 pub const KIB_PER_S: &str = "{value} KiB/s";
 pub const MIB_PER_S: &str = "{value} MiB/s";
 
-// Added after the explainer's first notes.
 /// The swap line, on a machine with no swap.
 pub const NO_SWAP: &str = "none";
 /// A GPU's panel when another GPU has the same name, with the name, `{name}`, and its number, `{n}`.
@@ -126,15 +125,14 @@ pub const OVER_THRESHOLD_HELP: &str = "Share of the time on the charts during wh
 /// The tooltip of the threshold's field: its default, and that a set one stays.
 pub const THRESHOLD_HELP: &str = "Threshold in watts for the share below the charts. Until you set it, it is 95% of the power limit, rounded, and follows the limit. Drag (1 W per pixel) or click and type, from 1 W up to the GPU's highest limit (1000 W if unknown). Once set, it is kept for this GPU and the 95% default cannot come back.";
 /// Measuring has stopped while the window runs, for `{time}`, as minutes and
-/// seconds. Written by Claude after the copy step, from its vocabulary.
+/// seconds.
 pub const STOPPED: &str =
     "No measurement for {time}: values and charts are frozen. If it lasts, restart slm.";
 /// The tooltip of a disk's space: that used space counts all the space users
-/// cannot write to. Corrected by Claude after the copy step: btrfs has no root
-/// reserve, yet its used space is above df's.
+/// cannot write to. It says no more, because btrfs has no root reserve, yet
+/// its used space is above df's.
 pub const SPACE_HELP: &str = "Counts all space users cannot write to, so it can be above what df shows; the size matches df.";
 
-// Added for the side window (D43, D44), and written by the copy step (D47).
 /// The button that opens the settings and the boxes of what is shown.
 pub const SETTINGS: &str = "Settings";
 /// The interval, `{refresh}`, and the span, `{span}`, in the top line.
@@ -157,15 +155,13 @@ pub const CPU_TEMPERATURE: &str = "CPU temp";
 pub const SHARE_AT: &str = "{share} ({threshold})";
 
 /// A disk's space used, `{amount}`, and its share, `{share}`, in its pie's
-/// tooltip (D48). Written by Claude after the copy step, from its vocabulary.
+/// tooltip (D48).
 pub const SPACE_FULL: &str = "{amount} ({share})";
-// Added after the copy step's capture, as slot T85.
 /// The threshold, named in the power chart's tooltip.
 pub const THRESHOLD: &str = "Threshold";
 
-// What a pointer on a name tells (D50), written by Claude from the
-// vocabulary, not by the copy step. Each is one line of a tooltip, left out
-// when its values are unknown.
+// The tooltips of the names (D50). Each is one line, left out when its values
+// are unknown.
 /// A GPU's architecture and its VRAM, such as "Turing · 8.0 GiB VRAM".
 pub const GPU_KIND: &str = "{architecture} · {vram} VRAM";
 /// A PCIe link, `{generation}` and `{width}` as the card reports them.

@@ -162,7 +162,7 @@ impl App {
         if !self.styled {
             ui.ctx().all_styles_mut(|style| {
                 style.spacing.interact_size.y = TARGET_HEIGHT;
-                // The size of the mock-up the requester chose (D44), so that
+                // The size of the chosen mock-up (D44), so that
                 // every line fits the small window.
                 for text_style in [egui::TextStyle::Body, egui::TextStyle::Button] {
                     if let Some(font) = style.text_styles.get_mut(&text_style) {
@@ -582,7 +582,7 @@ fn row(ui: &mut Ui, name: &str, values: Vec<Value<String>>) -> Vec<Response> {
     row_about(ui, name, None, values)
 }
 
-/// A row whose name tells, under the pointer, `about` (D50).
+/// A row whose name has `about` as its tooltip (D50).
 fn row_about(
     ui: &mut Ui,
     name: &str,
@@ -671,7 +671,7 @@ fn pair_value(ui: &mut Ui, name: &str, first: Value<f64>, second: Value<f64>) {
     }
 }
 
-/// Two rates in the unit of the larger, written once: `0.8 / 0.7 KiB/s`. A
+/// Two rates in the unit of the larger, written once: `0.8 · 0.7 KiB/s`. A
 /// missing one shows its mark, and the value's tooltip says why.
 fn rate_pair(first: Value<f64>, second: Value<f64>) -> Value<String> {
     if first.is_err() && second.is_err() {

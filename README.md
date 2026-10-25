@@ -12,7 +12,7 @@ A small window that shows how loaded your Linux machine is: the GPU, CPU, memory
 - **Disks:** reading and writing, and a pie of how full each one is, yellow from 70% and red from 90%.
 - **Network:** receiving and sending, per adapter.
 
-Point at a chart or a pie for its numbers, and at a name for what the device is: the GPU's PCIe link and the temperature it slows down at, the network link's speed, the disk's model. The **Settings** button sets how often slm measures, how far back the charts go, and which lines and charts are shown.
+Hover over a chart or a pie for its numbers, and over a name for details of the device: the GPU's PCIe link and the temperature it slows down at, the network link's speed, the disk's model. The **Settings** button sets how often slm measures, how far back the charts go, and which lines and charts are shown.
 
 ## Install
 
@@ -31,6 +31,8 @@ slm has been used on Ubuntu with GNOME on X11. It is meant to work on Wayland to
 
 - [docs/reference.md](docs/reference.md): where each number comes from, how the GPU's power is computed, and how to work on slm.
 - [SPEC.md](SPEC.md): the decisions behind it.
+
+slm is developed with Claude, an AI assistant, following [wgm](https://github.com/mirandadam/wgm); `WGM.md` and `CLAUDE.md` hold that process's settings for this repository.
 
 ## License
 
