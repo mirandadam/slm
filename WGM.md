@@ -6,7 +6,7 @@
 - **Who may answer**: the default, whoever asks. Today that is the maintainer, Daniel Araújo Miranda, in the terminal session or on the change's issue.
 - **Where things are written**:
   - The specification, with the product's vocabulary, is `SPEC.md` beside this file.
-  - `README.md` is the as-built reference, for people who run slm and for people who change it. What only the next editor of a piece of code needs goes in a comment beside that code.
+  - `docs/reference.md` is the as-built reference, for people who run slm and for people who change it. `README.md` is a short introduction with a screenshot, what slm shows and how to install it, as the maintainer asked on 2026-10-25. What only the next editor of a piece of code needs goes in a comment beside that code.
   - Frozen analyses, observations of use among them, go in `docs/analyses/`, one file each, dated in the name and in the text. There are none yet.
   - Insights drawn from observations go in `docs/insights.md`.
   - slm keeps no recordings or quotations of people, so there is no place for them.
