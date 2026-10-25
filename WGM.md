@@ -10,7 +10,7 @@
   - Frozen analyses, observations of use among them, go in `docs/analyses/`, one file each, dated in the name and in the text. There are none yet.
   - Insights drawn from observations go in `docs/insights.md`.
   - slm keeps no recordings or quotations of people, so there is no place for them.
-  - The backlog is `BACKLOG.md`, beside this file, until the repository is published. From then on it is the issues of the public repository, and what is left in `BACKLOG.md` moves there.
+  - The backlog is `BACKLOG.md`, beside this file. The repository is published, and the maintainer keeps the backlog there rather than in its issues, for now (2026-10-25).
   - Plans take the default, beside this file.
   - There are no agent instructions besides `CLAUDE.md`.
 - **Good to use, here**: the standard's seven checks are written for a web browser and do not apply as written, because slm is a native desktop window. These carry over:
